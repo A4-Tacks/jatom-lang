@@ -1,0 +1,151 @@
+use crate::Arc;
+use crate::syntax::{
+    *,
+    ExprValue::{
+        Op1,
+        Op2,
+        And,
+        Or,
+        Call,
+    },
+};
+
+grammar;
+
+extern {
+    type Error = Error;
+}
+
+match {
+    r"\s+" => {},
+    r"#[^\r\n]*" => {},
+} else { _ }
+
+#[inline]
+V<E>: Arc<ExprValue> = E => Arc::new(<>.into());
+#[inline]
+A<E>: Expr = <l:@L> <v:E> <r:@R> => Expr::new(v, (l, r));
+#[inline]
+E<E>: Expr = <l:@L> <v:E> <r:@R> => {
+    #![allow(clippy::useless_conversion)]
+    Expr::new(Arc::new(v.into()), (l, r))
+};
+#[inline]
+Sep<E, S>: Vec<E> = <mut acc:(<E> S)*> <tail:E> => {
+    acc.push(tail);
+    acc
+};
+UnpackA<T>: Arc<ExprValue> = T => <>.value;
+
+pub Expr: Expr = A<Or<Add>>;
+pub Cond: Expr = A<Or<UnpackA<Atom>>>;
+Or<T>: Arc<ExprValue> = {
+    <A<Or<T>>> "||" <A<And<T>>> => Or(<>).into(),
+    And<T>,
+}
+And<T>: Arc<ExprValue> = {
+    <A<And<T>>> "&&" <A<Eq<T>>> => And(<>).into(),
+    Eq<T>,
+}
+Eq<T>: Arc<ExprValue> = {
+    <A<Cmp<T>>> "==" <A<Cmp<T>>> => Op2(BinaryOp::Eq, <>).into(),
+    <A<Cmp<T>>> "!=" <A<Cmp<T>>> => Op2(BinaryOp::Ne, <>).into(),
+    Cmp<T>,
+}
+Cmp<T>: Arc<ExprValue> = {
+    <A<T>> "<" <A<T>> => Op2(BinaryOp::Lt, <>).into(),
+    <A<T>> ">" <A<T>> => Op2(BinaryOp::Gt, <>).into(),
+    <A<T>> "<=" <A<T>> => Op2(BinaryOp::Le, <>).into(),
+    <A<T>> ">=" <A<T>> => Op2(BinaryOp::Ge, <>).into(),
+    T,
+}
+Add: Arc<ExprValue> = {
+    <A<Add>> "+" <A<Mul>> => Op2(BinaryOp::Add, <>).into(),
+    <A<Add>> "-" <A<Mul>> => Op2(BinaryOp::Sub, <>).into(),
+    Mul,
+}
+Mul: Arc<ExprValue> = {
+    <A<Mul>> "*" <A<EIf>> => Op2(BinaryOp::Mul, <>).into(),
+    <A<Mul>> "/" <A<EIf>> => Op2(BinaryOp::Div, <>).into(),
+    <A<Mul>> "%" <A<EIf>> => Op2(BinaryOp::Rem, <>).into(),
+    <A<Mul>> "//" <A<EIf>> => Op2(BinaryOp::IDiv, <>).into(),
+    EIf,
+}
+EIf: Arc<ExprValue> = {
+    V<IfElseIf<A<EIfV>, A<EIf>>>,
+    V<IfOnly<A<EIfV>, A<EIf>>>,
+    EIfV,
+}
+EIfV: Arc<ExprValue> = {
+    V<IfElse<A<EIfV>, A<EIf>>>,
+    Neg,
+}
+Neg: Arc<ExprValue> = {
+    AtomOps<A<Neg>>,
+    EDotCall,
+}
+EDotCall: Arc<ExprValue> = {
+    DotCall<A<Call>, A<Call>>,
+    DotCall<A<Call>, A<AtomOps<A<Call>>>>,
+    DotCall<A<Call>, A<AtomOps<A<AtomOps<A<Call>>>>>>,
+    Call,
+}
+Call: Arc<ExprValue> = {
+    <f:A<Call>> "(" <p:Sep<Expr, ",">> ","? ")" => Arc::new(Call(f, p).into()),
+    UnpackA<AtomT>,
+}
+
+pub Pipe: Expr = E<Atom+>;
+pub EPipe: Expr = E<Sep<Expr, ";">>;
+pub Atom: Expr = {
+    AtomV,
+    E<IfElseIf<AtomV, Atom>>,
+    E<IfOnly<AtomV, Atom>>,
+}
+AtomV: Expr = {
+    E<IfElse<AtomV, Atom>>,
+    A<AtomOps<AtomV>>,
+    A<DotCall<AtomT, AtomV>>,
+    AtomT,
+}
+AtomT: Expr = {
+    "(" <Pipe> ")",
+    "{" <EPipe> "}",
+    E<Literal>,
+    E<Ident>,
+}
+AtomOps<V>: Arc<ExprValue> = {
+    "-" <V> => Op1(SingleOp::Neg, <>).into(),
+    "!" <V> => Op1(SingleOp::Not, <>).into(),
+}
+DotCall<F, P>: Arc<ExprValue> = <f:F> "." <p:P> => {
+    Call(f, vec![p]).into()
+};
+pub Ident: &'input str = {
+    r"\p{xid_start}[_\p{xid_continue}]*|_[_\p{xid_continue}]+",
+}
+pub Literal: Literal = {
+    r"[0-9]+(\.[0-9]+)?(e[+\-]?[0-9]+)?" => {
+        <>.parse::<f64>().unwrap().into()
+    },
+    String,
+}
+String: Literal = {
+    r"'[^']*'" => <>[1..<>.len()-1].into(),
+    r"''''''" => "".into(),
+    r"'''[^\n\r][^']*'''" => <>[3..<>.len()-3].into(),
+    r"'''\n[^']*'''" => <>[4..<>.len()-3].into(),
+    r"'''\r\n[^']*'''" => <>[5..<>.len()-3].into(),
+    r#""([^"\\]|\\([\\nrbte"]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}))""# =>? {
+        Literal::escape(&<>[1..<>.len()-1]).map_err(Into::into)
+    }
+}
+IfElse<V, A>: If = "if" <cond:Cond> <yes:V> "else" <no:V> => {
+    If::new(cond, yes, no.into())
+};
+IfElseIf<V, A>: If = "if" <cond:Cond> <yes:V> "else" <no:E<IfOnly<V, A>>> => {
+    If::new(cond, yes, no.into())
+};
+IfOnly<V, A>: If = "if" <cond:Cond> <yes:A> => {
+    If::new(cond, yes, None)
+};
