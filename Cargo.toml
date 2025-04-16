@@ -3,16 +3,12 @@ name = "jatom-lang"
 version = "0.1.0"
 edition = "2021"
 
-[build-dependencies]
-lalrpop = { version = "=0.22.1" }
+[workspace]
+members = ["jatom-parser"]
 
-[dependencies]
+[workspace.dependencies]
 ordered-float = "5.0.0"
 
-[dependencies.lalrpop-util]
-version = "=0.22.1"
-
-features = [
-    "unicode",
-    "lexer",
-]
+[dependencies]
+ordered-float = { workspace = true }
+jatom-parser = { path = "jatom-parser" }

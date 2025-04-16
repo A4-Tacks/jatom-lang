@@ -166,6 +166,14 @@ dependencies = [
 name = "jatom-lang"
 version = "0.1.0"
 dependencies = [
+ "jatom-parser",
+ "ordered-float",
+]
+
+[[package]]
+name = "jatom-parser"
+version = "0.1.0"
+dependencies = [
  "lalrpop",
  "lalrpop-util",
  "ordered-float",
