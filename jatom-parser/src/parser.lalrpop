@@ -1,4 +1,7 @@
-use crate::Arc;
+use crate::{
+    Arc,
+    ParseState,
+};
 use crate::syntax::{
     *,
     ExprValue::{
@@ -7,10 +10,11 @@ use crate::syntax::{
         And,
         Or,
         Call,
+        Assign,
     },
 };
 
-grammar;
+grammar(state: &mut ParseState);
 
 extern {
     type Error = Error;
@@ -117,12 +121,15 @@ AtomT: Expr = {
 AtomOps<V>: Arc<ExprValue> = {
     "-" <V> => Op1(SingleOp::Neg, <>).into(),
     "!" <V> => Op1(SingleOp::Not, <>).into(),
+    <Ident> "=" <V> => Assign(<>).into(),
 }
 DotCall<F, P>: Arc<ExprValue> = <f:F> "." <p:P> => {
     Call(f, vec![p]).into()
 };
-pub Ident: &'input str = {
-    r"\p{xid_start}[_\p{xid_continue}]*|_[_\p{xid_continue}]+",
+pub Ident: Ident = {
+    r"\p{xid_start}[_\p{xid_continue}]*|_[_\p{xid_continue}]+" => {
+        state.ident(<>)
+    },
 }
 pub Literal: Literal = {
     r"[0-9]+(\.[0-9]+)?(e[+\-]?[0-9]+)?" => {
@@ -133,9 +140,9 @@ pub Literal: Literal = {
 String: Literal = {
     r"'[^']*'" => <>[1..<>.len()-1].into(),
     r"''''''" => "".into(),
-    r"'''[^\n\r][^']*'''" => <>[3..<>.len()-3].into(),
-    r"'''\n[^']*'''" => <>[4..<>.len()-3].into(),
-    r"'''\r\n[^']*'''" => <>[5..<>.len()-3].into(),
+    r"'''[^\n\r](?:'?'?[^'])*'''" => <>[3..<>.len()-3].into(),
+    r"'''\n(?:'?'?[^'])*'''" => <>[4..<>.len()-3].into(),
+    r"'''\r\n(?:'?'?[^'])*'''" => <>[5..<>.len()-3].into(),
     r#""([^"\\]|\\([\\nrbte"]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}))""# =>? {
         Literal::escape(&<>[1..<>.len()-1]).map_err(Into::into)
     }

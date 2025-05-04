@@ -12,3 +12,5 @@ ordered-float = "5.0.0"
 [dependencies]
 ordered-float = { workspace = true }
 jatom-parser = { path = "jatom-parser" }
+smol_str = "0.3.2"
+itermaps = "0.3.3"

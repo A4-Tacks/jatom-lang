@@ -37,6 +37,12 @@ impl std::ops::Deref for Expr {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Ident {
+    pub name: Arc<str>,
+    pub id: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ExprValue {
     Pipe(Vec<Expr>),
     Op1(SingleOp, Expr),
@@ -45,23 +51,24 @@ pub enum ExprValue {
     Or(Expr, Expr),
     If(If),
     Call(Expr, Vec<Expr>),
+    Assign(Ident, Expr),
     Literal(Literal),
-    Ident(Arc<str>),
+    Ident(Ident),
 }
 impl_enum_froms!(impl From for ExprValue {
     Pipe => Vec<Expr>;
     Literal => Literal;
     If => If;
-    Ident => &'_ str;
+    Ident => Ident;
 });
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
 pub enum SingleOp {
     Neg,
     Not,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
 pub enum BinaryOp {
     Add,
     Sub,
@@ -79,9 +86,9 @@ pub enum BinaryOp {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct If {
-    cond: Expr,
-    yes: Expr,
-    no: Option<Expr>,
+    pub cond: Expr,
+    pub yes: Expr,
+    pub no: Option<Expr>,
 }
 impl If {
     pub fn new(cond: Expr, yes: Expr, no: Option<Expr>) -> Self {
@@ -263,9 +270,13 @@ mod tests {
             "'a'.'b'",
             "fmt.'b'",
             "('a'fmt.'b')",
+            "x=2",
+            "x=-2",
+            "{x=2+3}",
         ];
+        let state = &mut Default::default();
         for src in srcs {
-            parser.parse(src).expect(src);
+            parser.parse(state, src).expect(src);
         }
     }
 }
