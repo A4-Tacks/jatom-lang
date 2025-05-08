@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, collections::BTreeMap, hash::Hash};
+use std::{borrow::Borrow, collections::BTreeMap, fmt::Display, hash::Hash};
 
 use itermaps::MapExt;
 use ordered_float::OrderedFloat;
@@ -9,7 +9,7 @@ use jatom_parser::{
 };
 
 
-#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Default)]
 pub struct Value {
     pub data: ValueData,
     pub location: usize,
@@ -23,9 +23,15 @@ impl From<&Expr> for Value {
     }
 }
 
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Default)]
+struct Scope {
+    names: BTreeMap<Arc<str>, Arc<Value>>,
+    this: Value,
+}
+
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Runtime {
-    scopes: Vec<BTreeMap<Arc<str>, Arc<Value>>>,
+    scopes: Vec<Scope>,
 }
 impl Default for Runtime {
     fn default() -> Self {
@@ -41,6 +47,12 @@ pub struct Ident {
     id: usize,
     pub(crate)
     value: Option<Arc<Value>>,
+}
+
+impl Display for Ident {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        <Arc<str> as Display>::fmt(&self.name, f)
+    }
 }
 
 impl Borrow<usize> for Ident {
@@ -106,6 +118,12 @@ pub enum ValueData {
     If(If),
     Ident(Ident),
     This,
+    Null,
+}
+impl Default for ValueData {
+    fn default() -> Self {
+        Self::Null
+    }
 }
 impl From<Arc<ExprValue>> for ValueData {
     fn from(value: Arc<ExprValue>) -> Self {

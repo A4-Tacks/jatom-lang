@@ -1,11 +1,37 @@
-use std::{collections::BTreeMap, result};
+use std::{collections::BTreeMap, fmt::Display, result};
 use crate::runtime::{Ident, If, Value, ValueData};
 use itermaps::short_funcs::default;
 use jatom_parser::Arc;
 
 #[derive(Debug, Clone)]
-pub enum Error {
-    NotBindToIdent(Ident),
+pub struct Error {
+    error: ErrorInfo,
+    location: usize,
+}
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        <ErrorInfo as Display>::fmt(&self.error, f)
+    }
+}
+impl Error {
+    pub fn location(&self) -> usize {
+        self.location
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ErrorInfo {
+    UndefinedIdent(Ident),
+}
+impl Display for ErrorInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ErrorInfo::UndefinedIdent(ident) => {
+                write!(f, "undefined `{ident}` in scope")?
+            },
+        }
+        Ok(())
+    }
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -54,6 +80,10 @@ impl AnalysisContext {
     }
 
     pub fn analysis(&mut self, ast: &mut Value) -> Result<()> {
+        let err = |error| {
+            Err(Error { error, location: ast.location })
+        };
+
         match &mut ast.data {
             ValueData::Number(_) => (),
             ValueData::String(_) => (),
@@ -82,26 +112,28 @@ impl AnalysisContext {
                     self.scoper().analysis(Arc::make_mut(no))?;
                 }
             },
-            ValueData::Ident(ident) => {
-                if let Some(value) = self.scopes.last_mut().unwrap()
-                    .get(ident)
-                {
-                    ident.value = value.clone().into();
-                } else {
-                    return Err(Error::NotBindToIdent(ident.clone()));
-                }
-            },
             ValueData::List(list) => {
                 let mut this = self.scoper();
                 for ast in Arc::make_mut(list) {
                     this.analysis(ast)?
                 }
             },
+            ValueData::Ident(ident) => {
+                if let Some(value) = self.scopes
+                    .iter_mut()
+                    .rev()
+                    .find_map(|map: _| map.get_mut(ident))
+                {
+                    ident.value = value.clone().into();
+                } else {
+                    return err(ErrorInfo::UndefinedIdent(ident.clone()));
+                }
+            },
             ValueData::Assign(ident, value) => {
                 self.scopes.last_mut().unwrap()
                     .insert(ident.clone(), value.clone());
             },
-            ValueData::This => (),
+            ValueData::This | ValueData::Null => (),
         }
 
         Ok(())
