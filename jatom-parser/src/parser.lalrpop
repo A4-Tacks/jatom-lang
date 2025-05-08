@@ -11,6 +11,8 @@ use crate::syntax::{
         Or,
         Call,
         Assign,
+        List,
+        This,
     },
 };
 
@@ -40,9 +42,14 @@ Sep<E, S>: Vec<E> = <mut acc:(<E> S)*> <tail:E> => {
     acc
 };
 UnpackA<T>: Arc<ExprValue> = T => <>.value;
+Cat<A, T>: A = <mut a:A> <t:T> => { a.push(t); a };
+Tac<T, A>: A = <t:T> <mut a:A> => { a.insert(0, t); a };
 
 pub Expr: Expr = A<Or<Add>>;
 pub Cond: Expr = A<Or<UnpackA<Atom>>>;
+pub Pipe: Expr = E<Atom+>;
+pub EPipe: Expr = E<Sep<Expr, ";">>;
+
 Or<T>: Arc<ExprValue> = {
     <A<Or<T>>> "||" <A<And<T>>> => Or(<>).into(),
     And<T>,
@@ -82,25 +89,20 @@ EIf: Arc<ExprValue> = {
 }
 EIfV: Arc<ExprValue> = {
     V<IfElse<A<EIfV>, A<EIf>>>,
-    Neg,
+    Neg<EDotCall>,
 }
-Neg: Arc<ExprValue> = {
-    AtomOps<A<Neg>>,
-    EDotCall,
+Neg<T>: Arc<ExprValue> = {
+    AtomOps<A<Neg<T>>>,
+    T,
 }
 EDotCall: Arc<ExprValue> = {
-    DotCall<A<Call>, A<Call>>,
-    DotCall<A<Call>, A<AtomOps<A<Call>>>>,
-    DotCall<A<Call>, A<AtomOps<A<AtomOps<A<Call>>>>>>,
-    Call,
+    ComCall<A<EAtom>, A<Neg<EAtom>>>,
+    EAtom,
 }
-Call: Arc<ExprValue> = {
-    <f:A<Call>> "(" <p:Sep<Expr, ",">> ","? ")" => Arc::new(Call(f, p).into()),
+EAtom: Arc<ExprValue> = {
     UnpackA<AtomT>,
 }
 
-pub Pipe: Expr = E<Atom+>;
-pub EPipe: Expr = E<Sep<Expr, ";">>;
 pub Atom: Expr = {
     AtomV,
     E<IfElseIf<AtomV, Atom>>,
@@ -109,7 +111,7 @@ pub Atom: Expr = {
 AtomV: Expr = {
     E<IfElse<AtomV, Atom>>,
     A<AtomOps<AtomV>>,
-    A<DotCall<AtomT, AtomV>>,
+    A<ComCall<AtomT, AtomT>>,
     AtomT,
 }
 AtomT: Expr = {
@@ -117,15 +119,18 @@ AtomT: Expr = {
     "{" <EPipe> "}",
     E<Literal>,
     E<Ident>,
+    "." => todo!(),
 }
 AtomOps<V>: Arc<ExprValue> = {
     "-" <V> => Op1(SingleOp::Neg, <>).into(),
     "!" <V> => Op1(SingleOp::Not, <>).into(),
     <Ident> "=" <V> => Assign(<>).into(),
 }
-DotCall<F, P>: Arc<ExprValue> = <f:F> "." <p:P> => {
-    Call(f, vec![p]).into()
-};
+ComCall<F, P>: Arc<ExprValue> = {
+    <f:A<Call<F>>> <p:E<ComCallParam<P>>> => {
+        Arc::new(vec![p, f].into())
+    },
+}
 pub Ident: Ident = {
     r"\p{xid_start}[_\p{xid_continue}]*|_[_\p{xid_continue}]+" => {
         state.ident(<>)
@@ -147,6 +152,9 @@ String: Literal = {
         Literal::escape(&<>[1..<>.len()-1]).map_err(Into::into)
     }
 }
+This<T>: Arc<ExprValue> = T => This.into();
+Call<T>: Arc<ExprValue> = T => Call(<>).into();
+ComCallParam<P>: ExprValue = Tac<A<This<()>>, ("," <P>)+> => List(<>);
 IfElse<V, A>: If = "if" <cond:Cond> <yes:V> "else" <no:V> => {
     If::new(cond, yes, no.into())
 };

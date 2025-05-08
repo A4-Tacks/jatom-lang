@@ -72,12 +72,8 @@ impl AnalysisContext {
                 self.scoper().analysis(Arc::make_mut(value))?;
                 self.scoper().analysis(Arc::make_mut(value1))?;
             },
-            ValueData::Call(fun, values) => {
+            ValueData::Call(fun) => {
                 self.scoper().analysis(Arc::make_mut(fun))?;
-                let mut this = self.scoper();
-                for ast in Arc::make_mut(values) {
-                    this.analysis(ast)?
-                }
             },
             ValueData::If(If { cond, yes, no }) => {
                 self.scoper().analysis(Arc::make_mut(cond))?;
@@ -95,10 +91,17 @@ impl AnalysisContext {
                     return Err(Error::NotBindToIdent(ident.clone()));
                 }
             },
+            ValueData::List(list) => {
+                let mut this = self.scoper();
+                for ast in Arc::make_mut(list) {
+                    this.analysis(ast)?
+                }
+            },
             ValueData::Assign(ident, value) => {
                 self.scopes.last_mut().unwrap()
                     .insert(ident.clone(), value.clone());
             },
+            ValueData::This => (),
         }
 
         Ok(())

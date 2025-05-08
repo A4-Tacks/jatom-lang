@@ -101,9 +101,11 @@ pub enum ValueData {
     And(Arc<Value>, Arc<Value>),
     Or(Arc<Value>, Arc<Value>),
     Assign(Ident, Arc<Value>),
-    Call(Arc<Value>, Arc<[Value]>),
+    Call(Arc<Value>),
+    List(Arc<[Value]>),
     If(If),
     Ident(Ident),
+    This,
 }
 impl From<Arc<ExprValue>> for ValueData {
     fn from(value: Arc<ExprValue>) -> Self {
@@ -122,9 +124,7 @@ impl From<&ExprValue> for ValueData {
         }
         match value {
             ExprValue::Pipe(vec) => {
-                Self::Pipe(vec.iter()
-                    .map_into()
-                    .collect())
+                Self::Pipe(vec.iter().map_into().collect())
             },
             ExprValue::Op1(single_op, expr) => {
                 Self::Op1(*single_op, arc(expr))
@@ -148,8 +148,11 @@ impl From<&ExprValue> for ValueData {
             ExprValue::Assign(name, value) => {
                 Self::Assign(name.into(), arc(value.into()))
             },
-            ExprValue::Call(expr, args) => {
-                Self::Call(arc(expr), args.iter().map_into().collect())
+            ExprValue::Call(expr) => {
+                Self::Call(arc(expr))
+            },
+            ExprValue::List(exprs) => {
+                Self::List(exprs.iter().map_into().collect())
             },
             ExprValue::Literal(p::Literal::String(s)) => {
                 Self::String(s.clone().into())
@@ -158,6 +161,7 @@ impl From<&ExprValue> for ValueData {
                 Self::Number(*num)
             },
             ExprValue::Ident(i) => Self::Ident(i.into()),
+            ExprValue::This => Self::This,
         }
     }
 }
