@@ -46,10 +46,10 @@ Cat<A, T>: A = <mut a:A> <t:T> => { a.push(t); a };
 Ext<A, B>: A = <mut a:A> <b:B> => { a.extend(b); a };
 Tac<T, A>: A = <t:T> <mut a:A> => { a.insert(0, t); a };
 
-pub Expr: Expr = A<Or<Add>>;
-pub Cond: Expr = A<Or<UnpackA<Atom>>>;
+Expr: Expr = A<Or<Add>>;
+Cond: Expr = A<Or<UnpackA<Atom>>>;
 pub Pipe: Expr = E<Atom+>;
-pub EPipe: Expr = E<Sep<Expr, ";">>;
+EPipe: Expr = E<Sep<Expr, ";">>;
 
 Or<T>: Arc<ExprValue> = {
     <A<Or<T>>> "||" <A<And<T>>> => Or(<>).into(),
@@ -133,12 +133,12 @@ ComCall<F, P>: Arc<ExprValue> = {
         Arc::new(vec![p, f].into())
     },
 }
-pub Ident: Ident = {
+Ident: Ident = {
     r"\p{xid_start}[_\p{xid_continue}]*|_[_\p{xid_continue}]+" => {
         state.ident(<>)
     },
 }
-pub Literal: Literal = {
+Literal: Literal = {
     r"[0-9]+(\.[0-9]+)?(e[+\-]?[0-9]+)?" => {
         <>.parse::<f64>().unwrap().into()
     },
