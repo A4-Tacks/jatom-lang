@@ -43,6 +43,7 @@ Sep<E, S>: Vec<E> = <mut acc:(<E> S)*> <tail:E> => {
 };
 UnpackA<T>: Arc<ExprValue> = T => <>.value;
 Cat<A, T>: A = <mut a:A> <t:T> => { a.push(t); a };
+Ext<A, B>: A = <mut a:A> <b:B> => { a.extend(b); a };
 Tac<T, A>: A = <t:T> <mut a:A> => { a.insert(0, t); a };
 
 pub Expr: Expr = A<Or<Add>>;
@@ -117,6 +118,7 @@ AtomV: Expr = {
 AtomT: Expr = {
     "(" <Pipe> ")",
     "{" <EPipe> "}",
+    "[" <A<List<Expr>>> "]",
     E<Literal>,
     E<Ident>,
     "." => todo!(),
@@ -127,7 +129,7 @@ AtomOps<V>: Arc<ExprValue> = {
     <Ident> "=" <V> => Assign(<>).into(),
 }
 ComCall<F, P>: Arc<ExprValue> = {
-    <f:A<Call<F>>> <p:E<ComCallParam<P>>> => {
+    <f:A<Call<F>>> <p:A<ComCallParam<P>>> => {
         Arc::new(vec![p, f].into())
     },
 }
@@ -154,7 +156,8 @@ String: Literal = {
 }
 This<T>: Arc<ExprValue> = T => This.into();
 Call<T>: Arc<ExprValue> = T => Call(<>).into();
-ComCallParam<P>: ExprValue = Tac<A<This<()>>, ("," <P>)+> => List(<>);
+ComCallParam<P>: Arc<ExprValue> = Tac<A<This<()>>, ("," <P>)+> => List(<>).into();
+List<T>: Arc<ExprValue> = Ext<(<T> ";")*, T?> => List(<>).into();
 IfElse<V, A>: If = "if" <cond:Cond> <yes:V> "else" <no:V> => {
     If::new(cond, yes, no.into())
 };
